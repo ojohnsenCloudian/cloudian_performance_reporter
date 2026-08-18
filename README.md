@@ -7,6 +7,8 @@ A Next.js 15 application for visualizing Cloudian benchmark results. Upload an X
 **Prerequisites:** Node.js 20+
 
 ```bash
+git clone https://github.com/ojohnsenCloudian/cloudian_performance_reporter.git
+cd cloudian_performance_reporter
 npm install
 npm run dev
 ```
