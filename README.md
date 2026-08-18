@@ -2,32 +2,22 @@
 
 A Next.js 15 application for visualizing Cloudian benchmark results. Upload an XLSX or CSV export to explore throughput scaling, latency, CPU efficiency, cached reads, and multipart upload performance — then export a PDF report.
 
-## Running locally
+## Running
 
-**Prerequisites:** Node.js 20+
+**Prerequisites:** Docker and Docker Compose
 
 ```bash
 git clone https://github.com/ojohnsenCloudian/cloudian_performance_reporter.git
 cd cloudian_performance_reporter
-npm install
-npm run dev
-```
-
-Open [http://localhost:3000](http://localhost:3000).
-
-## Running with Docker
-
-```bash
-docker compose up --build
+docker compose up --build -d
 ```
 
 Open [http://localhost:8080](http://localhost:8080).
 
-To run in the background:
+To stop:
 
 ```bash
-docker compose up --build -d
-docker compose down   # to stop
+docker compose down
 ```
 
 ## Input format
@@ -67,12 +57,3 @@ public/
   xlsx-lite.js          # XLSX/CSV parser (loaded dynamically)
   doc-page.js           # <doc-page> web component for PDF printing
 ```
-
-## Building for production
-
-```bash
-npm run build
-npm start
-```
-
-The Docker image uses `output: 'standalone'` for a minimal self-contained build.
