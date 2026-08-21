@@ -195,6 +195,39 @@ export function buildFullDashboard(file: any) {
   }
 }
 
+function sizeLabel(testName: string): string {
+  const m = testName.match(/-(\d+[kmgKMG])-/i)
+  if (!m) return '?'
+  const raw = m[1].toLowerCase()
+  if (raw.endsWith('k')) return raw.slice(0, -1) + ' KiB'
+  if (raw.endsWith('m')) return raw.slice(0, -1) + ' MiB'
+  if (raw.endsWith('g')) return raw.slice(0, -1) + ' GiB'
+  return raw
+}
+
+export function parseGosbenchJSON(jsonData: any): { table: { headers: string[], rows: any[] }, name: string, mapping: any } {
+  const pd: any[] = jsonData.PerformanceData || []
+  const headers = ['Operation', 'Object Size', 'Workers', 'Throughput (MiB/s)', 'Latency (ms)', 'Objects/s']
+  const rows = pd.map((r: any) => ({
+    'Operation': r.OpName === 'write' ? 'Write' : 'Read',
+    'Object Size': sizeLabel(r.TestName),
+    'Workers': r.Workers,
+    'Throughput (MiB/s)': +(r.BandwidthBps / 1048576).toFixed(2),
+    'Latency (ms)': +r.AvgLatencyms.toFixed(3),
+    'Objects/s': +r.OpsPerSec.toFixed(3),
+  }))
+  const mapping = {
+    category: 'Object Size',
+    operation: 'Operation',
+    threads: 'Workers',
+    throughput: 'Throughput (MiB/s)',
+    latency: 'Latency (ms)',
+    objectsPerSec: 'Objects/s',
+  }
+  const name = jsonData.ClusterName || jsonData.RunDescription || 'Benchmark'
+  return { table: { headers, rows }, name, mapping }
+}
+
 export function generateDemoData() {
   const configs = [
     { name: 'RDMA EC 4+2', base: 3200, cpu: 4 }, { name: 'TCP EC 4+2', base: 2400, cpu: 9 },

@@ -2,7 +2,7 @@
 
 import { useRef, useState, useCallback, useEffect } from 'react'
 import { fmtNum, toNum, buildBarChart } from '@/lib/chartUtils'
-import { buildFullDashboard, buildScalingCharts, nextColor, generateDemoData } from '@/lib/dataUtils'
+import { buildFullDashboard, buildScalingCharts, nextColor, generateDemoData, parseGosbenchJSON } from '@/lib/dataUtils'
 
 const ROLES = ['category', 'protocol', 'operation', 'objectSize', 'threads', 'throughput', 'latency', 'objectsPerSec', 'cpuMin', 'cpuMax', 'cpuAvg', 'state']
 const ROLE_LABELS: Record<string, string> = {
@@ -230,37 +230,53 @@ export default function StorageDashboard() {
     setLoading(true); setError(null)
     const arr = Array.from(fileList)
     const newFiles: any[] = []
+    const newQueueIds: string[] = []
     try {
       const mod: any = await loadXlsxMod()
       for (const f of arr) {
         const ext = f.name.split('.').pop()?.toLowerCase()
-        let sheets: any, sheetNames: string[], mainSheetName: string
-        if (ext === 'csv') {
-          const text = await f.text()
-          const table = mod.parseCSV(text)
-          sheets = { [f.name]: table }; sheetNames = [f.name]; mainSheetName = f.name
-        } else {
-          const buf = await f.arrayBuffer()
-          const wb = await mod.parseXlsx(buf)
-          sheets = wb.sheets; sheetNames = wb.sheetNames
-          mainSheetName = mod.pickMainSheet(sheets, sheetNames)
-        }
-        const table = sheets[mainSheetName]
-        if (!table || table.headers.length === 0) throw new Error(`Couldn't find a data table in "${f.name}".`)
-        const mapping = mod.autoDetectMapping(table.headers)
-        const otherSheets: any = {}
-        sheetNames.forEach((n: string) => { if (n !== mainSheetName) otherSheets[n] = sheets[n] })
         const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
-        newFiles.push({ id, name: f.name, sheets, sheetNames, mainSheetName, headers: table.headers, rows: table.rows, mapping, otherSheets, color: nextColor(files.length + newFiles.length) })
+        const color = nextColor(files.length + newFiles.length)
+
+        if (ext === 'json') {
+          const text = await f.text()
+          let jsonData: any
+          try { jsonData = JSON.parse(text) } catch { throw new Error(`"${f.name}" is not valid JSON.`) }
+          if (!Array.isArray(jsonData.PerformanceData)) throw new Error(`"${f.name}" doesn't look like a Gosbench JSON export (missing PerformanceData array).`)
+          const { table, name, mapping } = parseGosbenchJSON(jsonData)
+          if (!table.rows.length) throw new Error(`No performance data found in "${f.name}".`)
+          newFiles.push({ id, name, sheets: { 'Performance Data': table }, sheetNames: ['Performance Data'], mainSheetName: 'Performance Data', headers: table.headers, rows: table.rows, mapping, otherSheets: {}, color })
+          // JSON mapping is fully known — skip the mapping confirmation screen
+        } else {
+          let sheets: any, sheetNames: string[], mainSheetName: string
+          if (ext === 'csv') {
+            const text = await f.text()
+            const table = mod.parseCSV(text)
+            sheets = { [f.name]: table }; sheetNames = [f.name]; mainSheetName = f.name
+          } else {
+            const buf = await f.arrayBuffer()
+            const wb = await mod.parseXlsx(buf)
+            sheets = wb.sheets; sheetNames = wb.sheetNames
+            mainSheetName = mod.pickMainSheet(sheets, sheetNames)
+          }
+          const table = sheets[mainSheetName]
+          if (!table || table.headers.length === 0) throw new Error(`Couldn't find a data table in "${f.name}".`)
+          const mapping = mod.autoDetectMapping(table.headers)
+          const otherSheets: any = {}
+          sheetNames.forEach((n: string) => { if (n !== mainSheetName) otherSheets[n] = sheets[n] })
+          newFiles.push({ id, name: f.name, sheets, sheetNames, mainSheetName, headers: table.headers, rows: table.rows, mapping, otherSheets, color })
+          newQueueIds.push(id)
+        }
       }
     } catch (e: any) {
       setLoading(false); setError(e.message || 'Could not read that file.'); return
     }
-    const nextQueue = newFiles.map(f => f.id)
-    setFiles(prev => { const all = [...prev, ...newFiles]; return all })
-    setMappingQueue(prev => { const all = [...prev, ...nextQueue]; return all })
+    const nextAllFiles = [...files, ...newFiles]
+    const nextQueue = [...mappingQueue, ...newQueueIds]
+    setFiles(() => nextAllFiles)
+    setMappingQueue(() => nextQueue)
     setLoading(false)
-    advanceQueue([...files, ...newFiles], [...mappingQueue, ...nextQueue])
+    advanceQueue(nextAllFiles, nextQueue)
   }
 
   const onDrop = (e: React.DragEvent) => { e.preventDefault(); setDragOver(false); if (e.dataTransfer.files.length) onFilesSelected(e.dataTransfer.files) }
@@ -418,8 +434,8 @@ export default function StorageDashboard() {
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2"><path d="M12 16V4M12 4L7 9M12 4l5 5" strokeLinecap="round" strokeLinejoin="round" /><path d="M4 16v3a2 2 0 002 2h12a2 2 0 002-2v-3" strokeLinecap="round" strokeLinejoin="round" /></svg>
               </div>
               <div style={{ fontWeight: 600, marginBottom: '5px', fontSize: '15px' }}>Drop your file here, or click to browse</div>
-              <div style={{ fontSize: '13px', color: 'var(--muted)' }}>.xlsx or .csv — upload several to compare</div>
-              <input ref={fileInputRef} type="file" accept=".xlsx,.csv" multiple onChange={onFileInputChange} style={{ display: 'none' }} />
+              <div style={{ fontSize: '13px', color: 'var(--muted)' }}>.xlsx, .csv, or Gosbench .json — upload several to compare</div>
+              <input ref={fileInputRef} type="file" accept=".xlsx,.csv,.json" multiple onChange={onFileInputChange} style={{ display: 'none' }} />
             </div>
             {error && <div style={{ marginTop: '14px', padding: '12px 16px', background: 'var(--danger-soft)', color: 'var(--danger)', borderRadius: '10px', fontSize: '13px' }}>{error}</div>}
             {loading && <div style={{ marginTop: '14px', textAlign: 'center', color: 'var(--muted)', fontSize: '13px' }}>Reading file…</div>}
