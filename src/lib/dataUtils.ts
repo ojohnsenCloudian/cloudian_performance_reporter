@@ -18,6 +18,7 @@ export function computePeakCards(file: any) {
   const { mapping, rows } = file
   const cards: any[] = []
   if (mapping.throughput) {
+    const tpUnit = (mapping.throughput.match(/\(([^)]+)\)/) || [])[1] || 'MB/s'
     if (mapping.operation) {
       const byOp: Record<string, number> = {}
       rows.forEach((r: any) => {
@@ -28,10 +29,10 @@ export function computePeakCards(file: any) {
         if (!k) return
         if (!byOp[k] || v > byOp[k]) byOp[k] = v
       })
-      Object.keys(byOp).forEach((k, i) => cards.push({ label: `Peak ${k} Throughput`, rawValue: byOp[k], value: fmtNum(byOp[k]), unit: 'MiB/s', dotColor: nextColor(i) }))
+      Object.keys(byOp).forEach((k, i) => cards.push({ label: `Peak ${k} Throughput`, rawValue: byOp[k], value: fmtNum(byOp[k]), unit: tpUnit, dotColor: nextColor(i) }))
     } else {
       const vals = rows.map((r: any) => toNum(r[mapping.throughput])).filter((v: any) => v != null)
-      if (vals.length) cards.push({ label: 'Peak Throughput', rawValue: Math.max(...vals), value: fmtNum(Math.max(...vals)), unit: 'MiB/s', dotColor: nextColor(0) })
+      if (vals.length) cards.push({ label: 'Peak Throughput', rawValue: Math.max(...vals), value: fmtNum(Math.max(...vals)), unit: tpUnit, dotColor: nextColor(0) })
     }
   }
   if (mapping.objectsPerSec) {
@@ -207,12 +208,12 @@ function sizeLabel(testName: string): string {
 
 export function parseGosbenchJSON(jsonData: any): { table: { headers: string[], rows: any[] }, name: string, mapping: any } {
   const pd: any[] = jsonData.PerformanceData || []
-  const headers = ['Operation', 'Object Size', 'Workers', 'Throughput (MiB/s)', 'Latency (ms)', 'Objects/s']
+  const headers = ['Operation', 'Object Size', 'Workers', 'Throughput (MB/s)', 'Latency (ms)', 'Objects/s']
   const rows = pd.map((r: any) => ({
     'Operation': r.OpName === 'write' ? 'Write' : 'Read',
     'Object Size': sizeLabel(r.TestName),
     'Workers': r.Workers,
-    'Throughput (MiB/s)': +(r.BandwidthBps / 1048576).toFixed(2),
+    'Throughput (MB/s)': +(r.BandwidthBps / 1e6).toFixed(2),
     'Latency (ms)': +r.AvgLatencyms.toFixed(3),
     'Objects/s': +r.OpsPerSec.toFixed(3),
   }))
@@ -220,7 +221,7 @@ export function parseGosbenchJSON(jsonData: any): { table: { headers: string[], 
     category: 'Object Size',
     operation: 'Operation',
     threads: 'Workers',
-    throughput: 'Throughput (MiB/s)',
+    throughput: 'Throughput (MB/s)',
     latency: 'Latency (ms)',
     objectsPerSec: 'Objects/s',
   }
