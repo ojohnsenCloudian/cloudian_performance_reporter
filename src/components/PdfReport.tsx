@@ -145,7 +145,7 @@ export default function PdfReport({ reportTargets, reportDetails, generatedDate,
               {rt.smallMultiples?.length > 0 && (
                 <div style={{ ...panel, marginBottom: '20px' }}><SmallMultiples items={rt.smallMultiples} /></div>
               )}
-              {rt.scalingCharts.map((item: any, i: number) => (
+              {(rt.scalingChartsLegacy ?? rt.scalingCharts ?? []).map((item: any, i: number) => (
                 <div key={i} style={{ ...panel, marginBottom: '16px', breakInside: 'avoid' }}>
                   <div style={{ fontWeight: 700, fontSize: '13px', marginBottom: '10px' }}>{item.title}</div>
                   <SlaLineChart chart={item.chart} />

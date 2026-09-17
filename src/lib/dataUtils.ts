@@ -1,4 +1,4 @@
-import { fmtNum, toNum, buildLineChart, buildSlaLineChart, buildHeatmap, buildStackedBarChart, buildRankedBars, buildPairedBars } from './chartUtils'
+import { fmtNum, toNum, buildLineChart, buildSlaLineChart, buildHeatmap, buildStackedBarChart, buildRankedBars, buildPairedBars, buildFlowChart, buildDotPlot, buildRangePlot, buildSlopeChart, buildSweepPlot } from './chartUtils'
 
 // Matches the redesign's fixed 4-color categorical palette (RED, BLUE, TEAL, GOLD).
 export const SERIES_COLORS = [
@@ -279,6 +279,131 @@ export function buildMpuAnalysis(file: any) {
   return { title: 'Multipart Upload (MPU) Performance', ranked, lineChart, recommended: rowsData[bestIdx]?.size }
 }
 
+// Flow chart version of buildScalingChart — uses pill-label lines instead of
+// the old SLA line chart. Falls back gracefully when data is absent.
+function buildFlowScalingChart(file: any, opFilter: string | null, slaValue?: number) {
+  const { mapping, rows } = file
+  if (!mapping.threads || !mapping.throughput) return null
+  const groups: Record<string, any[]> = {}
+  rows.forEach((r: any) => {
+    if (opFilter && mapping.operation) {
+      const op = String(r[mapping.operation] || '').toLowerCase()
+      if (!op.includes(opFilter)) return
+    }
+    const key = groupKey(r, mapping)
+    const x = toNum(r[mapping.threads]), y = toNum(r[mapping.throughput])
+    if (x == null || y == null) return
+    ;(groups[key] = groups[key] || []).push({ x, y })
+  })
+  const keys = Object.keys(groups)
+  if (!keys.length) return null
+  keys.forEach(k => groups[k].sort((a, b) => a.x - b.x))
+  const seriesList = keys.map((k, i) => ({ label: k, color: nextColor(i), points: groups[k] }))
+  return buildFlowChart(seriesList, { slaValue, slaLabel: slaValue != null ? `SLA ${fmtNum(slaValue)} MiB/s` : undefined })
+}
+
+export function buildFlowScalingCharts(file: any, slaValue?: number) {
+  const { mapping, rows } = file
+  if (!mapping.threads || !mapping.throughput) return []
+  if (mapping.operation) {
+    const ops = [...new Set(rows.map((r: any) => String(r[mapping.operation] || '').toLowerCase()))]
+    const charts: any[] = []
+    if (ops.some((o: any) => o.includes('write'))) { const c = buildFlowScalingChart(file, 'write', slaValue); if (c) charts.push({ title: 'Write Throughput Scaling', chart: c }) }
+    if (ops.some((o: any) => o.includes('read'))) { const c = buildFlowScalingChart(file, 'read', slaValue); if (c) charts.push({ title: 'Read Throughput Scaling', chart: c }) }
+    if (charts.length) return charts
+  }
+  const c = buildFlowScalingChart(file, null, slaValue)
+  return c ? [{ title: 'Throughput Scaling', chart: c }] : []
+}
+
+// Dot plot for latency (replaces ranked horizontal bars).
+export function buildLatencyDotPlot(file: any, slaValue?: number) {
+  const { mapping, rows } = file
+  if (!mapping.latency) return null
+  const groups: Record<string, any> = {}
+  rows.forEach((r: any) => {
+    const key = groupKey(r, mapping)
+    const v = toNum(r[mapping.latency]); if (v == null) return
+    const th = mapping.threads ? (toNum(r[mapping.threads]) || 0) : 0
+    if (!groups[key] || th >= groups[key].th) groups[key] = { value: v, th }
+  })
+  const keys = Object.keys(groups)
+  if (!keys.length) return null
+  const dotRows = keys.map((k, i) => ({ label: k, raw: groups[k].value, unit: 'ms', color: nextColor(i) }))
+  return buildDotPlot(dotRows, { sla: slaValue, slaLabel: slaValue != null ? `SLA ${fmtNum(slaValue)} ms` : undefined, sortDir: 1 })
+}
+
+// Range plot for CPU (replaces stacked min/avg/max bars).
+export function buildCpuRangePlot(file: any) {
+  const { mapping, rows } = file
+  if (!mapping.cpuAvg) return null
+  const groups: Record<string, { min: number[]; avg: number[]; max: number[] }> = {}
+  rows.forEach((r: any) => {
+    const avg = toNum(r[mapping.cpuAvg]); if (avg == null) return
+    const min = mapping.cpuMin ? (toNum(r[mapping.cpuMin]) ?? avg) : avg
+    const max = mapping.cpuMax ? (toNum(r[mapping.cpuMax]) ?? avg) : avg
+    const key = groupKey(r, mapping)
+    const g = (groups[key] = groups[key] || { min: [], avg: [], max: [] })
+    g.min.push(min); g.avg.push(avg); g.max.push(max)
+  })
+  const keys = Object.keys(groups)
+  if (!keys.length) return null
+  const plotRows = keys.map((k, i) => ({
+    label: k, color: nextColor(i),
+    min: Math.min(...groups[k].min),
+    avg: groups[k].avg.reduce((a, b) => a + b, 0) / groups[k].avg.length,
+    max: Math.max(...groups[k].max),
+  }))
+  return buildRangePlot(plotRows)
+}
+
+// Slope chart for cached-vs-initial reads (replaces paired bars).
+export function buildCachedSlopeChart(file: any) {
+  let found: any = null
+  for (const name of Object.keys(file.otherSheets || {})) {
+    const t = file.otherSheets[name]; const hl = t.headers.map((h: string) => h.toLowerCase())
+    if (hl.some((h: string) => h.includes('cached')) && hl.some((h: string) => h.includes('initial'))) { found = t; break }
+  }
+  if (!found) return null
+  const headers = found.headers
+  const initCol = headers.find((h: string) => /initial/i.test(h) && /through/i.test(h))
+  const cachedCol = headers.find((h: string) => /cached/i.test(h) && /through/i.test(h))
+  const initLatCol = headers.find((h: string) => /initial/i.test(h) && /laten/i.test(h))
+  const cachedLatCol = headers.find((h: string) => /cached/i.test(h) && /laten/i.test(h))
+  const labelCol = headers.find((h: string) => /scenario|config|name/i.test(h)) || headers[0]
+  if (!initCol || !cachedCol) return null
+  const pairs = found.rows.map((r: any, i: number) => {
+    const iv = toNum(r[initCol]), cv = toNum(r[cachedCol])
+    if (iv == null || cv == null) return null
+    const il = initLatCol ? (toNum(r[initLatCol]) ?? undefined) : undefined
+    const cl = cachedLatCol ? (toNum(r[cachedLatCol]) ?? undefined) : undefined
+    return { label: String(r[labelCol] || `Scenario ${i + 1}`), init: iv, cached: cv, il, cl, color: nextColor(i) }
+  }).filter(Boolean) as any[]
+  if (!pairs.length) return null
+  return buildSlopeChart(pairs)
+}
+
+// Sweep plot for MPU part-size sweep (replaces line + ranked bars).
+export function buildMpuSweep(file: any) {
+  let found: any = null
+  for (const name of Object.keys(file.otherSheets || {})) {
+    const t = file.otherSheets[name]
+    if (t.headers.some((h: string) => h.toLowerCase().includes('part size'))) { found = t; break }
+  }
+  if (!found) return null
+  const headers = found.headers
+  const sizeCol = headers.find((h: string) => h.toLowerCase().includes('part size'))
+  const tpCol = headers.find((h: string) => h.toLowerCase().includes('throughput'))
+  const latCol = headers.find((h: string) => h.toLowerCase().includes('latency'))
+  if (!sizeCol || !tpCol) return null
+  const data: { label: string; tp: number; lat: number | null }[] = found.rows
+    .map((r: any) => ({ label: String(r[sizeCol]), tp: toNum(r[tpCol])!, lat: latCol ? toNum(r[latCol]) : null }))
+    .filter((d: any) => d.tp != null)
+  if (data.length < 2) return null
+  const bestIdx = data.reduce((bi, d, i) => d.tp > data[bi].tp ? i : bi, 0)
+  return buildSweepPlot(data, { highlightIdx: bestIdx })
+}
+
 // Mini sparkline (throughput/latency/etc vs threads) for a KPI card.
 export function buildKpiSparkline(file: any, role: string, opFilter: string | null) {
   const { mapping, rows } = file
@@ -358,11 +483,97 @@ export function buildBaselineDiff(baseline: any, current: any): DiffRow[] {
   })
 }
 
+// ── Graphine-compatible tabular adapters ───────────────────────────────────
+
+function buildGrScalingChart(file: any, opFilter: string | null) {
+  const { mapping, rows } = file
+  if (!mapping.threads || !mapping.throughput) return null
+  const groups: Record<string, Record<number, number>> = {}
+  rows.forEach((r: any) => {
+    if (opFilter && mapping.operation) {
+      const op = String(r[mapping.operation] || '').toLowerCase()
+      if (!op.includes(opFilter)) return
+    }
+    const key = groupKey(r, mapping)
+    const x = toNum(r[mapping.threads]), y = toNum(r[mapping.throughput])
+    if (x == null || y == null) return
+    if (!groups[key]) groups[key] = {}
+    groups[key][x] = Math.max(groups[key][x] ?? 0, y)
+  })
+  const seriesKeys = Object.keys(groups)
+  if (!seriesKeys.length) return null
+  const allThreads = [...new Set(seriesKeys.flatMap(k => Object.keys(groups[k]).map(Number)))].sort((a, b) => a - b)
+  const tableRows = allThreads.map(t => {
+    const row: Record<string, string | number> = { label: String(t) }
+    seriesKeys.forEach(k => { row[k] = groups[k][t] ?? 0 })
+    return row
+  })
+  return { rows: tableRows, seriesKeys }
+}
+
+export function buildGrScalingCharts(file: any) {
+  const { mapping, rows } = file
+  if (!mapping.threads || !mapping.throughput) return []
+  if (mapping.operation) {
+    const ops = [...new Set(rows.map((r: any) => String(r[mapping.operation] || '').toLowerCase()))]
+    const charts: any[] = []
+    if (ops.some((o: any) => o.includes('write'))) { const c = buildGrScalingChart(file, 'write'); if (c) charts.push({ title: 'Write Throughput Scaling', ...c }) }
+    if (ops.some((o: any) => o.includes('read'))) { const c = buildGrScalingChart(file, 'read'); if (c) charts.push({ title: 'Read Throughput Scaling', ...c }) }
+    if (charts.length) return charts
+  }
+  const c = buildGrScalingChart(file, null)
+  return c ? [{ title: 'Throughput Scaling', ...c }] : []
+}
+
+export function buildGrLatencyData(file: any) {
+  const { mapping, rows } = file
+  if (!mapping.latency) return null
+  const groups: Record<string, any> = {}
+  rows.forEach((r: any) => {
+    const key = groupKey(r, mapping)
+    const v = toNum(r[mapping.latency]); if (v == null) return
+    const th = mapping.threads ? (toNum(r[mapping.threads]) || 0) : 0
+    if (!groups[key] || th >= groups[key].th) groups[key] = { value: v, th }
+  })
+  const keys = Object.keys(groups)
+  if (!keys.length) return null
+  return keys.map(k => ({ label: k, value: groups[k].value })).sort((a, b) => a.value - b.value)
+}
+
+export function buildGrMpuData(file: any) {
+  let found: any = null
+  for (const name of Object.keys(file.otherSheets || {})) {
+    const t = file.otherSheets[name]
+    if (t.headers.some((h: string) => h.toLowerCase().includes('part size'))) { found = t; break }
+  }
+  if (!found) return null
+  const headers = found.headers
+  const sizeCol = headers.find((h: string) => h.toLowerCase().includes('part size'))
+  const tpCol = headers.find((h: string) => h.toLowerCase().includes('throughput'))
+  const latCol = headers.find((h: string) => h.toLowerCase().includes('latency'))
+  if (!sizeCol || !tpCol || !latCol) return null
+  const result = found.rows
+    .map((r: any) => ({ label: String(r[sizeCol]), throughput: toNum(r[tpCol]) ?? 0, latency: toNum(r[latCol]) ?? 0 }))
+    .filter((d: any) => d.throughput > 0)
+  return result.length >= 2 ? result : null
+}
+
 export function buildFullDashboard(file: any, sla: { slaThroughput?: number; slaLatency?: number } = {}) {
   return {
     name: file.name, mainSheetName: file.mainSheetName, rowCount: file.rows.length,
     peakCards: computePeakCards(file),
-    scalingCharts: buildScalingCharts(file, sla.slaThroughput),
+    // Graphine interactive charts (primary view)
+    grScalingCharts: buildGrScalingCharts(file),
+    grLatencyData: buildGrLatencyData(file),
+    grMpuData: buildGrMpuData(file),
+    // Custom SVG chart types (CPU range, slope, etc.)
+    scalingCharts: buildFlowScalingCharts(file, sla.slaThroughput),
+    scalingChartsLegacy: buildScalingCharts(file, sla.slaThroughput),
+    latencyDotPlot: buildLatencyDotPlot(file, sla.slaLatency),
+    cpuRangePlot: buildCpuRangePlot(file),
+    cachedSlopeChart: buildCachedSlopeChart(file),
+    mpuSweep: buildMpuSweep(file),
+    // Retained for PDF / fallbacks
     latencyRanked: buildLatencyRanked(file, sla.slaLatency),
     smallMultiples: buildSmallMultiples(file),
     heatmap: buildConfigSizeHeatmap(file),

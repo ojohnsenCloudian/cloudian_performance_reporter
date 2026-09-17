@@ -3,7 +3,10 @@
 import { useRef, useState, useCallback, useEffect } from 'react'
 import { fmtNum, toNum } from '@/lib/chartUtils'
 import { buildFullDashboard, nextColor, generateDemoData, parseGosbenchJSON, buildKpiSparkline, buildBaselineDiff, evaluateCriteria, generateRecommendation, type ReportDetails } from '@/lib/dataUtils'
-import { LineChart, SlaLineChart, Legend, KpiCard, SmallMultiples, Heatmap, RankedBars, StackedBars, PairedBars, DiffTable, DataTable, ZoomIcon } from '@/components/charts'
+import { LineChart, SlaLineChart, Legend, KpiCard, SmallMultiples, Heatmap, RankedBars, StackedBars, PairedBars, DiffTable, DataTable, ZoomIcon, FlowChart, DotPlot, RangePlot, SlopeChart, SweepPlot } from '@/components/charts'
+import { ThroughputScalingChart } from '@/components/charts/ThroughputScalingChart'
+import { LatencyRankChart } from '@/components/charts/LatencyRankChart'
+import { MpuSweepChart } from '@/components/charts/MpuSweepChart'
 import PdfReport from '@/components/PdfReport'
 
 const ROLES = ['category', 'protocol', 'operation', 'objectSize', 'threads', 'throughput', 'latency', 'objectsPerSec', 'cpuMin', 'cpuMax', 'cpuAvg', 'state']
@@ -300,14 +303,9 @@ export default function StorageDashboard() {
     prevDisabled = pg <= 0; nextDisabled = pg >= totalPages - 1
   }
 
-  let zoomedChart: any = null
-  if (zoomedChartKey && !showCompareView && dash) {
-    if (zoomedChartKey === 'overview' && dash.scalingCharts[0]) zoomedChart = { type: 'sla-line', title: dash.scalingCharts[0].title, chart: dash.scalingCharts[0].chart }
-    else if (zoomedChartKey.startsWith('scaling-')) { const idx = parseInt(zoomedChartKey.split('-')[1]); const sc = dash.scalingCharts[idx]; if (sc) zoomedChart = { type: 'sla-line', title: sc.title, chart: sc.chart } }
-    else if (zoomedChartKey === 'cpu' && dash.cpuEnvelope) zoomedChart = { type: 'stacked', title: dash.cpuEnvelope.title, chart: dash.cpuEnvelope.chart }
-  }
+  const zoomedChart: any = null
 
-  const compareDashboards = showCompareView ? files.map(f => { const d = buildFullDashboard({ ...f, rows: applyFilters(f.rows, f.mapping, filters) }); return { id: f.id, name: f.name, color: f.color, peakCards: d.peakCards.slice(0, 3), scalingCharts: d.scalingCharts.slice(0, 1) } }) : []
+  const compareDashboards = showCompareView ? files.map(f => { const d = buildFullDashboard({ ...f, rows: applyFilters(f.rows, f.mapping, filters) }); return { id: f.id, name: f.name, color: f.color, peakCards: d.peakCards.slice(0, 3), scalingCharts: d.scalingChartsLegacy.slice(0, 1) } }) : []
 
   const baselineFile = files.find(f => f.id === baselineFileId) || (files.length > 1 ? files[0] : null)
   const compareCurrentFile = focusFileObj && focusFileObj.id !== baselineFile?.id ? focusFileObj : files.find(f => f.id !== baselineFile?.id) || null
@@ -553,18 +551,17 @@ export default function StorageDashboard() {
                   ))}
                 </div>
 
-                {dash.scalingCharts[0] && (
+                {dash.grScalingCharts[0] && (
                   <div>
-                    <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: '24px', paddingBottom: '12px', borderBottom: '1px solid var(--border)', marginBottom: '20px' }}>
-                      <div>
-                        <h3 className="d" style={{ margin: '0 0 5px', fontSize: '18px', fontWeight: 600, letterSpacing: '-.018em' }}>{dash.scalingCharts[0].title}</h3>
-                        <p style={{ margin: 0, fontSize: '13px', color: 'var(--muted)' }}>Throughput vs. concurrent threads, at the current filters</p>
-                      </div>
-                      <button className="zoom-btn" onClick={() => setZoomedChartKey('overview')}><ZoomIcon /></button>
+                    <div style={{ paddingBottom: '12px', borderBottom: '1px solid var(--border)', marginBottom: '20px' }}>
+                      <h3 className="d" style={{ margin: '0 0 5px', fontSize: '18px', fontWeight: 600, letterSpacing: '-.018em' }}>{dash.grScalingCharts[0].title}</h3>
+                      <p style={{ margin: 0, fontSize: '13px', color: 'var(--muted)' }}>Throughput vs. concurrent threads, at the current filters</p>
                     </div>
-                    <div className="glass" style={{ padding: '24px', borderRadius: 'var(--radius-lg)' }}>
-                      <SlaLineChart chart={dash.scalingCharts[0].chart} />
-                    </div>
+                    <ThroughputScalingChart
+                      data={dash.grScalingCharts[0].rows}
+                      seriesKeys={dash.grScalingCharts[0].seriesKeys}
+                      title={dash.grScalingCharts[0].title}
+                    />
                   </div>
                 )}
               </div>
@@ -577,14 +574,20 @@ export default function StorageDashboard() {
                 <h2 className="d" style={{ margin: '0 0 8px', fontSize: '30px', fontWeight: 600, letterSpacing: '-.028em' }}>Throughput Scaling</h2>
                 <p style={{ margin: '0 0 24px', fontSize: '14px', color: 'var(--muted)' }}>Per-configuration scaling curves and peak throughput by object size</p>
 
+                {dash.grScalingCharts.map((item: any, i: number) => (
+                  <div key={i} style={{ marginBottom: '24px' }}>
+                    <ThroughputScalingChart
+                      data={item.rows}
+                      seriesKeys={item.seriesKeys}
+                      title={item.title}
+                    />
+                  </div>
+                ))}
                 {dash.smallMultiples?.length > 0 && (
                   <div className="glass" style={{ padding: '24px', borderRadius: 'var(--radius-lg)', marginBottom: '24px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '18px' }}>
-                      <div>
-                        <h3 className="d" style={{ margin: '0 0 4px', fontSize: '16px', fontWeight: 600 }}>Scaling by configuration</h3>
-                        <p style={{ margin: 0, fontSize: '12.5px', color: 'var(--muted)' }}>Solid = read, dashed = write</p>
-                      </div>
-                      <button className="zoom-btn" onClick={() => setZoomedChartKey('scaling-0')}><ZoomIcon /></button>
+                    <div style={{ marginBottom: '18px' }}>
+                      <h3 className="d" style={{ margin: '0 0 4px', fontSize: '16px', fontWeight: 600 }}>Scaling by configuration</h3>
+                      <p style={{ margin: 0, fontSize: '12.5px', color: 'var(--muted)' }}>Solid = read, dashed = write</p>
                     </div>
                     <SmallMultiples items={dash.smallMultiples} />
                   </div>
@@ -596,15 +599,6 @@ export default function StorageDashboard() {
                     <Heatmap heat={dash.heatmap} />
                   </div>
                 )}
-                {!dash.smallMultiples?.length && !dash.heatmap && dash.scalingCharts.map((item: any, i: number) => (
-                  <div key={i} className="glass card-in" style={{ padding: '22px', borderRadius: 'var(--radius-lg)', marginBottom: '16px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                      <div style={{ fontWeight: 600, fontSize: '14px' }}>{item.title}</div>
-                      <button className="zoom-btn" onClick={() => setZoomedChartKey('scaling-' + i)}><ZoomIcon /></button>
-                    </div>
-                    <SlaLineChart chart={item.chart} />
-                  </div>
-                ))}
               </div>
             )}
 
@@ -614,7 +608,14 @@ export default function StorageDashboard() {
                 <div className="m" style={{ fontSize: '10px', letterSpacing: '.14em', textTransform: 'uppercase', color: 'var(--primary)', marginBottom: '9px' }}>Chapter 03</div>
                 <h2 className="d" style={{ margin: '0 0 8px', fontSize: '30px', fontWeight: 600, letterSpacing: '-.028em' }}>Latency</h2>
                 <p style={{ margin: '0 0 24px', fontSize: '14px', color: 'var(--muted)' }}>Response time at maximum tested concurrency, ranked fastest first</p>
-                {dash.latencyRanked && (
+                {dash.grLatencyData && (
+                  <LatencyRankChart
+                    data={dash.grLatencyData}
+                    title="Latency at Maximum Concurrency"
+                    unit="ms"
+                  />
+                )}
+                {!dash.grLatencyData && dash.latencyRanked && (
                   <div className="glass" style={{ padding: '24px', borderRadius: 'var(--radius-lg)' }}>
                     <RankedBars data={dash.latencyRanked.ranked} footnote={slaLatency != null ? `SLA marker at ${slaLatency} ms` : 'Sorted fastest to slowest'} />
                   </div>
@@ -628,12 +629,18 @@ export default function StorageDashboard() {
                 <div className="m" style={{ fontSize: '10px', letterSpacing: '.14em', textTransform: 'uppercase', color: 'var(--primary)', marginBottom: '9px' }}>Chapter 04</div>
                 <h2 className="d" style={{ margin: '0 0 8px', fontSize: '30px', fontWeight: 600, letterSpacing: '-.028em' }}>CPU Efficiency</h2>
                 <p style={{ margin: '0 0 24px', fontSize: '14px', color: 'var(--muted)' }}>Utilization envelope and throughput delivered per CPU percentage point</p>
-                {dash.cpuEnvelope && (
+                {dash.cpuRangePlot && (
                   <div className="glass" style={{ padding: '24px', borderRadius: 'var(--radius-lg)', marginBottom: '24px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                      <div style={{ fontWeight: 600, fontSize: '14px' }}>{dash.cpuEnvelope.title}</div>
-                      <button className="zoom-btn" onClick={() => setZoomedChartKey('cpu')}><ZoomIcon /></button>
+                    <div style={{ marginBottom: '20px' }}>
+                      <h3 className="d" style={{ margin: '0 0 4px', fontSize: '16px', fontWeight: 600 }}>CPU Utilization Range</h3>
+                      <p style={{ margin: 0, fontSize: '12.5px', color: 'var(--muted)' }}>Capsule spans min→max · dot marks average across all concurrency levels</p>
                     </div>
+                    <RangePlot data={dash.cpuRangePlot} />
+                  </div>
+                )}
+                {!dash.cpuRangePlot && dash.cpuEnvelope && (
+                  <div className="glass" style={{ padding: '24px', borderRadius: 'var(--radius-lg)', marginBottom: '24px' }}>
+                    <div style={{ fontWeight: 600, fontSize: '14px', marginBottom: '16px' }}>{dash.cpuEnvelope.title}</div>
                     <StackedBars chart={dash.cpuEnvelope.chart} />
                   </div>
                 )}
@@ -652,7 +659,19 @@ export default function StorageDashboard() {
                 <div className="m" style={{ fontSize: '10px', letterSpacing: '.14em', textTransform: 'uppercase', color: 'var(--primary)', marginBottom: '9px' }}>Chapter 05</div>
                 <h2 className="d" style={{ margin: '0 0 8px', fontSize: '30px', fontWeight: 600, letterSpacing: '-.028em' }}>Cached Reads</h2>
                 <p style={{ margin: '0 0 24px', fontSize: '14px', color: 'var(--muted)' }}>Read throughput before and after cache warm-up</p>
-                {dash.cachePairs ? <PairedBars pairs={dash.cachePairs.pairs} /> : <div style={{ color: 'var(--muted)', fontSize: '13.5px' }}>No cached-vs-initial sheet found in this workbook.</div>}
+                {dash.cachedSlopeChart ? (
+                  <div className="glass" style={{ padding: '24px', borderRadius: 'var(--radius-lg)' }}>
+                    <div style={{ marginBottom: '20px' }}>
+                      <h3 className="d" style={{ margin: '0 0 4px', fontSize: '16px', fontWeight: 600 }}>Cache Warm-Up Effect</h3>
+                      <p style={{ margin: 0, fontSize: '12.5px', color: 'var(--muted)' }}>Open circle = initial read · filled = after cache warm-up · chip shows throughput multiplier</p>
+                    </div>
+                    <SlopeChart data={dash.cachedSlopeChart} />
+                  </div>
+                ) : dash.cachePairs ? (
+                  <PairedBars pairs={dash.cachePairs.pairs} />
+                ) : (
+                  <div style={{ color: 'var(--muted)', fontSize: '13.5px' }}>No cached-vs-initial sheet found in this workbook.</div>
+                )}
               </div>
             )}
 
@@ -662,7 +681,13 @@ export default function StorageDashboard() {
                 <div className="m" style={{ fontSize: '10px', letterSpacing: '.14em', textTransform: 'uppercase', color: 'var(--primary)', marginBottom: '9px' }}>Chapter 06</div>
                 <h2 className="d" style={{ margin: '0 0 8px', fontSize: '30px', fontWeight: 600, letterSpacing: '-.028em' }}>Multipart Upload</h2>
                 <p style={{ margin: '0 0 24px', fontSize: '14px', color: 'var(--muted)' }}>MPU throughput and latency by part size, recommended size highlighted</p>
-                {dash.mpuAnalysis ? (
+                {dash.grMpuData ? (
+                  <MpuSweepChart
+                    data={dash.grMpuData}
+                    title="Throughput by Part Size"
+                    unit="MB/s"
+                  />
+                ) : dash.mpuAnalysis ? (
                   <>
                     {dash.mpuAnalysis.lineChart && (
                       <div className="glass" style={{ padding: '24px', borderRadius: 'var(--radius-lg)', marginBottom: '24px' }}>

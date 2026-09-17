@@ -329,6 +329,208 @@ export function DiffTable({ rows, baselineName, currentName }: { rows: any[]; ba
   )
 }
 
+// ── FlowChart: gradient lines with end-of-line pill labels ───────────────────
+export function FlowChart({ chart }: { chart: any }) {
+  if (!chart) return null
+  return (
+    <svg viewBox={chart.viewBox} style={{ display: 'block', width: '100%', height: 'auto', overflow: 'visible' }}>
+      <defs>
+        {chart.series.map((s: any) => (
+          <linearGradient key={s.gradId} id={s.gradId} x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stopColor={s.color} stopOpacity="0.25" />
+            <stop offset="55%" stopColor={s.color} stopOpacity="0.85" />
+            <stop offset="100%" stopColor={s.color} stopOpacity="1" />
+          </linearGradient>
+        ))}
+      </defs>
+      {chart.sla && (
+        <g>
+          <rect x={chart.plotLeft} y={chart.sla.bandY} width={chart.sla.plotWidth} height={chart.sla.bandH} fill="oklch(0.55 0.2 26 / .07)" />
+          <line x1={chart.plotLeft} x2={chart.plotRight} y1={chart.sla.y} y2={chart.sla.y} stroke="oklch(0.55 0.2 26 / .55)" strokeWidth="1.5" strokeDasharray="1 6" strokeLinecap="round" />
+          <rect x={chart.plotLeft} y={chart.sla.chipY} width="150" height="19" rx="9.5" fill="oklch(0.55 0.2 26)" />
+          <text x={chart.sla.chipTextX} y={chart.sla.chipTextY} className="m" style={{ fontSize: '10px', fontWeight: 500, letterSpacing: '.06em', fill: '#fff' }}>{chart.sla.label}</text>
+        </g>
+      )}
+      {chart.xTicks.map((t: any, i: number) => (
+        <g key={i}>
+          <line x1={t.x} x2={t.x} y1={chart.plotTop} y2={chart.baseY} stroke="var(--border)" strokeWidth="1" />
+          <text x={t.x} y={chart.tickTextY} textAnchor="middle" className="m" style={{ fontSize: '11px', fill: 'var(--muted)' }}>{t.label}</text>
+        </g>
+      ))}
+      {chart.yTicks.map((t: any, i: number) => (
+        <text key={i} x={chart.labelX} y={t.ty} textAnchor="end" className="m" style={{ fontSize: '11px', fill: 'var(--muted)' }}>{t.label}</text>
+      ))}
+      <line x1={chart.plotLeft} x2={chart.plotRight} y1={chart.baseY} y2={chart.baseY} stroke="var(--border)" strokeWidth="1.5" />
+      {chart.series.map((s: any) => (
+        <g key={s.gradId}>
+          <path d={s.path} fill="none" stroke={s.gradStroke} strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
+          <circle cx={s.endX} cy={s.endY} r="5" fill={s.color} />
+          <rect x={s.pillX} y={s.pillY} width={s.pillW} height="24" rx="12" fill={s.pillFill} />
+          <text x={s.pillTextX} y={s.pillTextY} className="m" style={{ fontSize: '11px', fontWeight: 500, fill: s.color }}>{s.pillLabel}</text>
+        </g>
+      ))}
+      <text x={chart.axisX} y={chart.axisY} textAnchor="middle" className="m" style={{ fontSize: '9.5px', letterSpacing: '.14em', fill: 'var(--muted)' }}>{chart.axisLabel}</text>
+    </svg>
+  )
+}
+
+// ── DotPlot: horizontal dot-on-track, one row per config ──────────────────────
+export function DotPlot({ data, footnote }: { data: any; footnote?: string }) {
+  if (!data) return null
+  return (
+    <div>
+      <svg viewBox={data.viewBox} style={{ display: 'block', width: '100%', height: 'auto', overflow: 'visible' }}>
+        {data.sla && (
+          <g>
+            <rect x={data.sla.x} y="0" width={data.sla.width} height={data.sla.height} fill="oklch(0.55 0.2 26 / .06)" rx="8" />
+            <line x1={data.sla.x} x2={data.sla.x} y1="6" y2={data.sla.lineBottom} stroke="oklch(0.55 0.2 26 / .7)" strokeWidth="1.5" strokeDasharray="4 4" />
+            <text x={data.sla.textX} y={data.sla.textY} className="m" style={{ fontSize: '10px', fontWeight: 500, letterSpacing: '.06em', fill: 'oklch(0.5 0.19 26)' }}>{data.sla.label}</text>
+          </g>
+        )}
+        {data.rows.map((r: any, i: number) => (
+          <g key={i}>
+            <text x={data.labelX} y={r.labelY} textAnchor="end" className="d" style={{ fontSize: '13.5px', fontWeight: 500, letterSpacing: '-.01em', fill: 'oklch(0.24 0.012 40)' }}>{r.label}</text>
+            {r.meta && <text x={data.labelX} y={r.metaY} textAnchor="end" className="m" style={{ fontSize: '10px', fill: 'var(--muted)' }}>{r.meta}</text>}
+            <line x1={data.trackX} x2={data.trackEnd} y1={r.cy} y2={r.cy} stroke="var(--border)" strokeWidth="2" strokeLinecap="round" />
+            <line x1={data.trackX} x2={r.cx} y1={r.cy} y2={r.cy} stroke={r.color} strokeWidth="3" strokeLinecap="round" opacity="0.32" />
+            <circle cx={r.cx} cy={r.cy} r="9" fill={r.color} />
+            <circle cx={r.cx} cy={r.cy} r="3.2" fill="oklch(0.985 0.005 70)" />
+            <text x={r.valueX} y={r.valueY} className="d" style={{ fontSize: '19px', fontWeight: 600, letterSpacing: '-.02em', fill: 'oklch(0.22 0.012 40)' }}>{r.value}</text>
+            <text x={r.unitX} y={r.valueY} className="m" style={{ fontSize: '10px', fill: 'var(--muted)' }}>{r.unit}</text>
+          </g>
+        ))}
+      </svg>
+      {footnote && (
+        <div style={{ marginTop: '18px', paddingTop: '14px', borderTop: '1px solid var(--border)' }}>
+          <span className="m" style={{ fontSize: '10.5px', color: 'var(--muted)' }}>{footnote}</span>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── RangePlot: horizontal min→avg→max capsule per config ──────────────────────
+export function RangePlot({ data }: { data: any }) {
+  if (!data) return null
+  return (
+    <div>
+      <svg viewBox={data.viewBox} style={{ display: 'block', width: '100%', height: 'auto', overflow: 'visible' }}>
+        {data.ticks.map((t: any, i: number) => (
+          <g key={i}>
+            <line x1={t.x} x2={t.x} y1="0" y2={data.gridBottom} stroke="var(--border)" strokeWidth="1" />
+            <text x={t.x} y={data.tickTextY} textAnchor="middle" className="m" style={{ fontSize: '10.5px', fill: 'var(--muted)' }}>{t.label}</text>
+          </g>
+        ))}
+        {data.rows.map((r: any, i: number) => (
+          <g key={i}>
+            <text x={data.labelX} y={r.labelY} textAnchor="end" className="d" style={{ fontSize: '13.5px', fontWeight: 500, letterSpacing: '-.01em', fill: 'oklch(0.24 0.012 40)' }}>{r.label}</text>
+            <rect x={r.capX} y={r.capY} width={r.capW} height="16" rx="8" fill={r.capFill} />
+            <circle cx={r.avgX} cy={r.cy} r="7.5" fill={r.color} />
+            <circle cx={r.avgX} cy={r.cy} r="2.6" fill="oklch(0.985 0.005 70)" />
+            <text x={r.minTextX} y={r.textY} textAnchor="end" className="m" style={{ fontSize: '10px', fill: 'var(--muted)' }}>{r.minLabel}</text>
+            <text x={r.maxTextX} y={r.textY} className="d" style={{ fontSize: '15px', fontWeight: 600, letterSpacing: '-.02em', fill: 'oklch(0.22 0.012 40)' }}>{r.maxLabel}</text>
+          </g>
+        ))}
+      </svg>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '20px', marginTop: '18px', paddingTop: '16px', borderTop: '1px solid var(--border)' }}>
+        {data.legend.map((l: any, i: number) => (
+          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ width: l.w, height: l.h, borderRadius: '99px', background: l.fill, display: 'inline-block' }} />
+            <span style={{ fontSize: '12.5px', color: 'var(--muted)' }}>{l.label}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ── SlopeChart: two-column before/after with connecting diagonal lines ─────────
+export function SlopeChart({ data }: { data: any }) {
+  if (!data) return null
+  return (
+    <div>
+      <svg viewBox={data.viewBox} style={{ display: 'block', width: '100%', height: 'auto', overflow: 'visible' }}>
+        {data.cols.map((c: any, i: number) => (
+          <g key={i}>
+            <line x1={c.x} x2={c.x} y1={data.top} y2={data.bottom} stroke="var(--border)" strokeWidth="1.5" />
+            <text x={c.x} y={data.headY} textAnchor="middle" className="m" style={{ fontSize: '10px', letterSpacing: '.11em', textTransform: 'uppercase', fill: 'var(--muted)' }}>{c.label}</text>
+          </g>
+        ))}
+        {data.lines.map((l: any, i: number) => (
+          <g key={i}>
+            <path d={l.path} fill="none" stroke={l.color} strokeWidth="3.5" strokeLinecap="round" />
+            <circle cx={l.x1} cy={l.y1} r="7" fill="oklch(0.985 0.005 70)" stroke={l.color} strokeWidth="3" />
+            <circle cx={l.x2} cy={l.y2} r="8.5" fill={l.color} />
+            <text x={l.label1X} y={l.label1Y} textAnchor="end" className="m" style={{ fontSize: '12px', fill: 'var(--muted)' }}>{l.value1}</text>
+            <text x={l.label2X} y={l.label2Y} className="d" style={{ fontSize: '18px', fontWeight: 600, letterSpacing: '-.02em', fill: l.color }}>{l.value2}</text>
+            <text x={l.nameX} y={l.nameY} className="m" style={{ fontSize: '11px', fill: 'var(--muted)' }}>{l.name}</text>
+            {l.lift && (
+              <>
+                <rect x={l.chipX} y={l.chipY} width="86" height="20" rx="10" fill={l.chipFill} />
+                <text x={l.chipTextX} y={l.chipTextY} textAnchor="middle" className="m" style={{ fontSize: '10.5px', fontWeight: 500, fill: '#fff' }}>{l.lift}</text>
+              </>
+            )}
+          </g>
+        ))}
+      </svg>
+      {data.notes.length > 0 && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: '14px', marginTop: '20px', paddingTop: '16px', borderTop: '1px solid var(--border)' }}>
+          {data.notes.map((n: any, i: number) => (
+            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <span style={{ width: '8px', height: '8px', borderRadius: '50%', flexShrink: 0, background: n.color, display: 'inline-block' }} />
+              <span className="m" style={{ fontSize: '10.5px', color: 'var(--muted)' }}>{n.text}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── SweepPlot: throughput + latency vs discrete sizes (MPU sweep) ──────────────
+export function SweepPlot({ data }: { data: any }) {
+  if (!data) return null
+  return (
+    <div>
+      <svg viewBox={data.viewBox} style={{ display: 'block', width: '100%', height: 'auto', overflow: 'visible' }}>
+        <defs>
+          <linearGradient id={data.gradId} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="oklch(0.55 0.2 26)" stopOpacity="0.22" />
+            <stop offset="100%" stopColor="oklch(0.55 0.2 26)" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        <rect x={data.recX} y={data.plotTop} width={data.recW} height={data.plotHeight} fill="oklch(0.55 0.2 26 / .07)" rx="10" />
+        <text x={data.recTextX} y={data.recTextY} textAnchor="middle" className="m" style={{ fontSize: '10px', fontWeight: 500, letterSpacing: '.08em', fill: 'oklch(0.5 0.19 26)' }}>RECOMMENDED</text>
+        {data.xTicks.map((t: any, i: number) => (
+          <g key={i}>
+            <line x1={t.x} x2={t.x} y1={data.plotTop} y2={data.baseY} stroke="var(--border)" strokeWidth="1" />
+            <text x={t.x} y={data.tickTextY} textAnchor="middle" className="m" style={{ fontSize: '11px', fill: 'var(--muted)' }}>{t.label}</text>
+          </g>
+        ))}
+        <line x1={data.plotLeft} x2={data.plotRight} y1={data.baseY} y2={data.baseY} stroke="var(--border)" strokeWidth="1.5" />
+        <path d={data.areaPath} fill={data.areaFill} />
+        <path d={data.tpPath} fill="none" stroke="oklch(0.55 0.2 26)" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
+        {data.latPath && <path d={data.latPath} fill="none" stroke="oklch(0.55 0.13 240)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="7 5" />}
+        {data.pts.map((pt: any, i: number) => (
+          <g key={i}>
+            <circle cx={pt.x} cy={pt.tpY} r={pt.r} fill="oklch(0.55 0.2 26)" />
+            <text x={pt.x} y={pt.tpTextY} textAnchor="middle" className="d" style={{ fontSize: '13px', fontWeight: 600, letterSpacing: '-.02em', fill: 'oklch(0.22 0.012 40)' }}>{pt.tpLabel}</text>
+          </g>
+        ))}
+      </svg>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '20px', marginTop: '16px', paddingTop: '16px', borderTop: '1px solid var(--border)' }}>
+        {data.legend.map((l: any, i: number) => (
+          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ width: '18px', height: '3.5px', borderRadius: '2px', background: l.fill, display: 'inline-block' }} />
+            <span style={{ fontSize: '12.5px', color: 'var(--muted)' }}>{l.label}</span>
+          </div>
+        ))}
+        {data.note && <span className="m" style={{ fontSize: '10.5px', color: 'var(--muted)', marginLeft: 'auto' }}>{data.note}</span>}
+      </div>
+    </div>
+  )
+}
+
 // ── DataTable (raw data / any sheet) ──────────────────────────────────────
 export function DataTable({ headers, rows, rowCountLabel, pageLabel, prevDisabled, nextDisabled, onPrev, onNext }: any) {
   return (
