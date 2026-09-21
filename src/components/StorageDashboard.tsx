@@ -1,7 +1,9 @@
 'use client'
 
 import { useRef, useState, useCallback, useEffect } from 'react'
+import Link from 'next/link'
 import { fmtNum, toNum } from '@/lib/chartUtils'
+import { useSettings } from '@/context/SettingsContext'
 import { buildFullDashboard, nextColor, generateDemoData, parseGosbenchJSON, buildKpiSparkline, buildBaselineDiff, evaluateCriteria, generateRecommendation, type ReportDetails } from '@/lib/dataUtils'
 import { LineChart, SlaLineChart, Legend, KpiCard, SmallMultiples, Heatmap, RankedBars, StackedBars, PairedBars, DiffTable, DataTable, ZoomIcon, FlowChart, DotPlot, RangePlot, SlopeChart, SweepPlot } from '@/components/charts'
 import { ThroughputScalingChart } from '@/components/charts/ThroughputScalingChart'
@@ -110,8 +112,27 @@ function ReportDetailsModal({ details, onChange, onGenerate, onClose }: any) {
   )
 }
 
+function scaleRows(rows: any[], factor: number) {
+  if (factor === 1) return rows
+  return rows.map(row => {
+    const out: Record<string, any> = {}
+    for (const [k, v] of Object.entries(row)) out[k] = k === 'label' ? v : typeof v === 'number' ? v * factor : v
+    return out
+  })
+}
+
+function scaledCard(card: any, factor: number, targetUnit: string) {
+  if (card.role !== 'throughput' || factor === 1) return card
+  const raw = card.rawValue * factor
+  return { ...card, rawValue: raw, value: raw < 10 ? raw.toFixed(2) : raw.toFixed(1), unit: targetUnit }
+}
+
 // ── Main component ─────────────────────────────────────────────────────────
 export default function StorageDashboard() {
+  const { settings } = useSettings()
+  const tpFactor = settings.throughputUnit === 'GB/s' ? 0.001 : 1
+  const tpUnit = settings.throughputUnit
+
   const [stage, setStage] = useState<'upload' | 'mapping' | 'dashboard'>('upload')
   const [files, setFiles] = useState<any[]>([])
   const [mappingQueue, setMappingQueue] = useState<string[]>([])
@@ -487,6 +508,9 @@ export default function StorageDashboard() {
                     <button onClick={() => { setCompareMode(v => !v); setActiveSection(compareMode ? 'overview' : 'compare') }} className="btn-graphite m" style={{ fontSize: '11px', fontWeight: 500, letterSpacing: '.05em', padding: '8px 12px', borderRadius: '9px', background: compareMode ? 'var(--primary)' : undefined, color: compareMode ? '#fff' : undefined }}>COMPARE</button>
                   )}
                   <button onClick={() => setReportDetailsOpen(true)} className="m" style={{ fontSize: '11px', fontWeight: 500, letterSpacing: '.05em', padding: '8px 14px', borderRadius: '9px', background: 'var(--primary)', color: '#fff', border: 'none' }}>EXPORT PDF</button>
+                  <Link href="/settings" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '32px', height: '32px', borderRadius: '9px', background: 'rgba(255,255,255,.07)', border: '1px solid var(--graphite-border)', color: 'var(--graphite-muted)' }} title="Settings">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                  </Link>
                 </div>
               </div>
             </div>
@@ -546,9 +570,10 @@ export default function StorageDashboard() {
                 <p style={{ margin: '0 0 24px', maxWidth: '62em', fontSize: '14px', lineHeight: 1.6, color: 'var(--muted)' }}>{dash.name} · {dash.mainSheetName} · {dash.rowCount} rows</p>
 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: '16px', marginBottom: '34px' }}>
-                  {peakCards.map((card: any, i: number) => (
-                    <KpiCard key={i} label={card.label} value={card.value} unit={card.unit} color={card.dotColor} spark={card.spark} />
-                  ))}
+                  {peakCards.map((card: any, i: number) => {
+                    const c = scaledCard(card, tpFactor, tpUnit)
+                    return <KpiCard key={i} label={c.label} value={c.value} unit={c.unit} color={c.dotColor} spark={c.spark} />
+                  })}
                 </div>
 
                 {dash.grScalingCharts[0] && (
@@ -558,9 +583,10 @@ export default function StorageDashboard() {
                       <p style={{ margin: 0, fontSize: '13px', color: 'var(--muted)' }}>Throughput vs. concurrent threads, at the current filters</p>
                     </div>
                     <ThroughputScalingChart
-                      data={dash.grScalingCharts[0].rows}
+                      data={scaleRows(dash.grScalingCharts[0].rows, tpFactor)}
                       seriesKeys={dash.grScalingCharts[0].seriesKeys}
                       title={dash.grScalingCharts[0].title}
+                      unit={tpUnit}
                     />
                   </div>
                 )}
@@ -577,9 +603,10 @@ export default function StorageDashboard() {
                 {dash.grScalingCharts.map((item: any, i: number) => (
                   <div key={i} style={{ marginBottom: '24px' }}>
                     <ThroughputScalingChart
-                      data={item.rows}
+                      data={scaleRows(item.rows, tpFactor)}
                       seriesKeys={item.seriesKeys}
                       title={item.title}
+                      unit={tpUnit}
                     />
                   </div>
                 ))}
@@ -683,9 +710,9 @@ export default function StorageDashboard() {
                 <p style={{ margin: '0 0 24px', fontSize: '14px', color: 'var(--muted)' }}>MPU throughput and latency by part size, recommended size highlighted</p>
                 {dash.grMpuData ? (
                   <MpuSweepChart
-                    data={dash.grMpuData}
+                    data={tpFactor === 1 ? dash.grMpuData : dash.grMpuData.map((d: any) => ({ ...d, throughput: d.throughput * tpFactor }))}
                     title="Throughput by Part Size"
-                    unit="MB/s"
+                    unit={tpUnit}
                   />
                 ) : dash.mpuAnalysis ? (
                   <>

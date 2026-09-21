@@ -1,6 +1,18 @@
 services:
   cloudian-performance:
-    build: .
+    build:
+      context: .
+      args:
+        - BUILD_COMMIT=${BUILD_COMMIT:-unknown}
     ports:
       - "8080:3000"
     restart: unless-stopped
+    volumes:
+      - settings_data:/data
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /Users/ojohnsen/Documents/cloudian_performance_reporter:/workspace
+    environment:
+      - HOST_PROJECT_DIR=/Users/ojohnsen/Documents/cloudian_performance_reporter
+
+volumes:
+  settings_data:
