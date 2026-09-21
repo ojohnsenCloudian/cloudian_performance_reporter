@@ -13,7 +13,7 @@ RUN npm run build
 
 FROM node:20-alpine AS runner
 WORKDIR /app
-RUN apk add --no-cache git docker-cli
+RUN apk add --no-cache git docker-cli docker-compose
 ENV NODE_ENV=production
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
