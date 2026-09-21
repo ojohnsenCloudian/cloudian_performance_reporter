@@ -66,7 +66,7 @@ export default function SettingsPage() {
     return () => clearInterval(id)
   }, [phase])
 
-  // status polling
+  // status polling — stay in 'running' until the network dies (container replaced)
   useEffect(() => {
     if (phase !== 'running') return
     const id = setInterval(async () => {
@@ -75,8 +75,7 @@ export default function SettingsPage() {
         if (!r.ok) { setPhase('restarting'); return }
         const s: UpdateStatus = await r.json()
         setStatus(s)
-        if (s.error) { setPhase('error'); return }
-        if (s.step >= 3) setPhase('restarting')
+        if (s.error) { setPhase('error') }
       } catch {
         setPhase('restarting')
       }
@@ -90,10 +89,17 @@ export default function SettingsPage() {
     const id = setInterval(async () => {
       try {
         const r = await fetch('/api/health', { cache: 'no-store' })
-        if (r.ok) { clearInterval(id); setPhase('done'); setStatus(s => ({ ...s, progress: 100 })) }
+        if (r.ok) { setPhase('done'); setStatus(s => ({ ...s, progress: 100 })) }
       } catch { /* still down */ }
     }, 2500)
     return () => clearInterval(id)
+  }, [phase])
+
+  // reload page once new container is confirmed up
+  useEffect(() => {
+    if (phase !== 'done') return
+    const t = setTimeout(() => window.location.reload(), 2000)
+    return () => clearTimeout(t)
   }, [phase])
 
   async function checkForUpdates() {
