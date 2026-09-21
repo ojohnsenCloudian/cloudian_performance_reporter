@@ -75,7 +75,8 @@ export default function SettingsPage() {
         if (!r.ok) { setPhase('restarting'); return }
         const s: UpdateStatus = await r.json()
         setStatus(s)
-        if (s.error) { setPhase('error') }
+        if (s.error) { setPhase('error'); return }
+        if (s.done) { setPhase('done') }
       } catch {
         setPhase('restarting')
       }

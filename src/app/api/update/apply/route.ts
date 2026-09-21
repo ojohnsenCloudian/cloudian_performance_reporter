@@ -52,6 +52,10 @@ echo "" >> "$LOG"
 echo "=== docker compose up ===" >> "$LOG"
 docker-compose -f /workspace/docker-compose.yml -p cloudian_performance_reporter up -d >> "$LOG" 2>&1
 echo "=== Container replaced ===" >> "$LOG"
+
+# Terminal status. Only written once the swap has completed, so any client that
+# reads done:true is already being served by the new container.
+printf '{"step":4,"label":"Update complete","progress":100,"done":true,"ts":%d}' "$(date +%s)" > "$STATUS"
 `
 
   try { fs.mkdirSync('/data', { recursive: true }) } catch { /* ok */ }
