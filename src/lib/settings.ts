@@ -3,5 +3,5 @@ export interface AppSettings {
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
-  throughputUnit: 'MB/s',
+  throughputUnit: 'GB/s',
 }

@@ -358,14 +358,19 @@ export default function StorageDashboard() {
       {isUpload && (
         <div style={{ minHeight: '100vh', display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 380px' }}>
           <div style={{ padding: '64px 56px', display: 'flex', flexDirection: 'column' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '11px', marginBottom: '56px' }}>
-              <div style={{ width: '32px', height: '32px', borderRadius: '9px', background: 'var(--primary)', display: 'grid', placeItems: 'center' }}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4"><path d="M4 18V7M11 18v-8M18 18v-5" strokeLinecap="round" /></svg>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '56px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '11px' }}>
+                <div style={{ width: '32px', height: '32px', borderRadius: '9px', background: 'var(--primary)', display: 'grid', placeItems: 'center' }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4"><path d="M4 18V7M11 18v-8M18 18v-5" strokeLinecap="round" /></svg>
+                </div>
+                <div>
+                  <div className="d" style={{ fontSize: '14px', fontWeight: 600, letterSpacing: '-.01em' }}>Cloudian</div>
+                  <div className="m" style={{ fontSize: '9.5px', letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--muted)' }}>Performance Reporter</div>
+                </div>
               </div>
-              <div>
-                <div className="d" style={{ fontSize: '14px', fontWeight: 600, letterSpacing: '-.01em' }}>Cloudian</div>
-                <div className="m" style={{ fontSize: '9.5px', letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--muted)' }}>Performance Reporter</div>
-              </div>
+              <Link href="/settings" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '32px', height: '32px', borderRadius: '9px', background: 'var(--surface-2)', border: '1px solid var(--border)', color: 'var(--muted)' }} title="Settings">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              </Link>
             </div>
             <div style={{ marginBottom: 'auto', maxWidth: '640px' }}>
               <div className="m" style={{ fontSize: '10.5px', letterSpacing: '.14em', textTransform: 'uppercase', color: 'var(--primary)', marginBottom: '18px' }}>Step 1 of 2</div>
